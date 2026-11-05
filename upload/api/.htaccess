@@ -1,0 +1,4 @@
+# Only the endpoint files may be opened from a browser
+<FilesMatch "^(config|config\.sample|lib)\.php$">
+  Require all denied
+</FilesMatch>

@@ -1,0 +1,24 @@
+# Homestay Maintenance: security settings (works on Hostinger's LiteSpeed/Apache)
+Options -Indexes
+DirectoryIndex index.html
+
+# Always use HTTPS
+<IfModule mod_rewrite.c>
+  RewriteEngine On
+  RewriteCond %{HTTPS} off
+  RewriteCond %{HTTP:X-Forwarded-Proto} !https
+  RewriteRule ^ https://%{HTTP_HOST}%{REQUEST_URI} [L,R=301]
+</IfModule>
+
+<IfModule mod_headers.c>
+  Header always set X-Content-Type-Options "nosniff"
+  Header always set X-Frame-Options "DENY"
+  Header always set Referrer-Policy "same-origin"
+  Header always set Strict-Transport-Security "max-age=31536000"
+  Header always set X-Robots-Tag "noindex, nofollow"
+</IfModule>
+
+# Never serve database dumps, notes or logs
+<FilesMatch "\.(sql|md|log|ini|bak|zip)$">
+  Require all denied
+</FilesMatch>

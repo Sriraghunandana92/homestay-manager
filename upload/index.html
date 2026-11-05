@@ -1,0 +1,972 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="robots" content="noindex,nofollow">
+<meta name="theme-color" content="#1f6b4f">
+<title>Homestay Maintenance</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700&family=Figtree:wght@400;500;600&family=JetBrains+Mono:wght@500&display=swap">
+<style>
+/* Layout: sticky header with tabs; each view is a stack of panels; the calendar is a room × night grid that scrolls sideways inside its own frame. */
+:root{
+  --bg:#f3f5f1; --surface:#ffffff; --sunk:#e8ece5; --line:#d5dbd1;
+  --fg:#1c241f; --muted:#5d6a61;
+  --accent:#1f6b4f; --accent-fg:#ffffff; --accent-soft:#d7ebe1;
+  --warm:#b0631c; --warm-soft:#f6e3cf;
+  --ok:#2b7a3d; --warn:#a96a00; --bad:#b3261e; --bad-soft:#f7dcd9;
+  --f-display:"Bricolage Grotesque", "Trebuchet MS", system-ui, sans-serif;
+  --f-body:"Figtree", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --f-num:"JetBrains Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+  --r:10px;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#121714; --surface:#1a211d; --sunk:#232b26; --line:#313b35;
+  --fg:#e6ece7; --muted:#9aa89f;
+  --accent:#5cc39a; --accent-fg:#0c1a13; --accent-soft:#1f3a2e;
+  --warm:#e39a55; --warm-soft:#3a2a1a;
+  --ok:#6cc985; --warn:#e0a83a; --bad:#f08a80; --bad-soft:#3d1f1c; color-scheme:dark }}
+:root[data-theme="dark"]{
+  --bg:#121714; --surface:#1a211d; --sunk:#232b26; --line:#313b35;
+  --fg:#e6ece7; --muted:#9aa89f;
+  --accent:#5cc39a; --accent-fg:#0c1a13; --accent-soft:#1f3a2e;
+  --warm:#e39a55; --warm-soft:#3a2a1a;
+  --ok:#6cc985; --warn:#e0a83a; --bad:#f08a80; --bad-soft:#3d1f1c; color-scheme:dark }
+
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}body{margin:0;min-height:100vh}[hidden]{display:none!important}img{max-width:100%}
+.loginwrap{position:fixed;inset:0;background:var(--bg);display:grid;place-items:center;z-index:30;padding:16px}
+.loginbox{width:min(380px,100%);display:flex;flex-direction:column;gap:12px}
+.loginbox h1{font-size:1.5rem}
+.roomedit{flex-wrap:wrap}.roomedit input{flex:1 1 110px}
+body{background:var(--bg);color:var(--fg);font-family:var(--f-body);font-size:15px;line-height:1.5}
+body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset-top,0px);z-index:10;background:var(--surface)}
+.wrap{max-width:1120px;margin:0 auto;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+header{position:sticky;top:env(safe-area-inset-top,0px);z-index:5;background:var(--surface);border-bottom:1px solid var(--line)}
+.hrow{display:flex;align-items:center;gap:12px;flex-wrap:wrap;padding-block:14px 4px}
+h1{font-family:var(--f-display);font-weight:700;font-size:1.45rem;margin:0;letter-spacing:-.01em;text-wrap:balance}
+.hsub{color:var(--muted);font-size:.85rem}
+.hrow .grow{flex:1}
+nav{display:flex;gap:4px;overflow-x:auto;padding-block:6px 0}
+nav a{padding:8px 14px;border-radius:8px 8px 0 0;color:var(--muted);text-decoration:none;font-weight:600;white-space:nowrap;border-bottom:2px solid transparent}
+nav a[aria-current="page"]{color:var(--accent);border-bottom-color:var(--accent)}
+nav a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+main{padding-block:20px 60px;display:flex;flex-direction:column;gap:20px}
+h2{font-family:var(--f-display);font-weight:600;font-size:1.1rem;margin:0}
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:16px;min-width:0}
+.phead{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:12px}
+.phead .grow{flex:1}
+.label{font-size:.72rem;text-transform:uppercase;letter-spacing:.07em;color:var(--muted);font-weight:600}
+.num{font-family:var(--f-num);font-variant-numeric:tabular-nums}
+.btn{font:inherit;font-weight:600;border:1px solid var(--line);background:var(--surface);color:var(--fg);padding:8px 14px;border-radius:8px;cursor:pointer}
+.btn:hover{background:var(--sunk)}
+.btn.primary{background:var(--accent);color:var(--accent-fg);border-color:var(--accent)}
+.btn.primary:hover{filter:brightness(1.06)}
+.btn.danger{color:var(--bad);border-color:var(--bad)}
+.btn.small{padding:4px 10px;font-size:.85rem}
+.btn[disabled]{opacity:.5;cursor:not-allowed}
+.banner{padding:10px 14px;border-radius:8px;background:var(--warm-soft);color:var(--fg);font-size:.9rem}
+
+/* stats */
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px}
+.stat{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:14px;display:flex;flex-direction:column;gap:4px}
+.stat .v{font-family:var(--f-num);font-size:1.35rem;font-variant-numeric:tabular-nums}
+.stat .s{font-size:.8rem;color:var(--muted)}
+.cols{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:20px}
+
+/* lists */
+.list{display:flex;flex-direction:column}
+.row{display:grid;grid-template-columns:1fr auto;gap:4px 12px;padding:10px 0;border-top:1px solid var(--line);align-items:center;cursor:pointer}
+.row:first-child{border-top:0}
+.row:hover .who{color:var(--accent)}
+.who{font-weight:600}
+.meta{font-size:.84rem;color:var(--muted)}
+.empty{color:var(--muted);font-size:.9rem;padding:8px 0}
+.pill{display:inline-block;font-size:.72rem;font-weight:600;padding:2px 8px;border-radius:99px;letter-spacing:.02em;white-space:nowrap}
+.p-confirmed{background:var(--accent-soft);color:var(--accent)}
+.p-checkedin{background:var(--accent);color:var(--accent-fg)}
+.p-checkedout{background:var(--sunk);color:var(--muted)}
+.p-cancelled{background:var(--bad-soft);color:var(--bad)}
+.p-due{background:var(--warm-soft);color:var(--warm)}
+.p-paid{background:var(--sunk);color:var(--ok)}
+.p-ex{background:var(--sunk);color:var(--muted);font-style:italic}
+
+/* table */
+.tablewrap{overflow-x:auto}
+table{border-collapse:collapse;width:100%;font-size:.9rem}
+th{text-align:left;font-size:.72rem;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);font-weight:600;padding:8px 10px;border-bottom:1px solid var(--line);white-space:nowrap}
+td{padding:10px;border-bottom:1px solid var(--line);vertical-align:top}
+td.r,th.r{text-align:right}
+tbody tr{cursor:pointer}
+tbody tr:hover td{background:var(--sunk)}
+
+/* calendar */
+.calwrap{overflow-x:auto;border:1px solid var(--line);border-radius:var(--r);background:var(--surface)}
+.cal{display:grid;min-width:max-content}
+.cal .c{border-right:1px solid var(--line);border-bottom:1px solid var(--line);min-height:52px}
+.cal .hd{position:sticky;top:0;background:var(--surface);font-size:.75rem;text-align:center;padding:6px 2px;color:var(--muted);min-height:auto}
+.cal .hd b{display:block;font-family:var(--f-num);font-size:.95rem;color:var(--fg);font-weight:500}
+.cal .hd.today b{color:var(--accent)}
+.cal .hd.we{background:var(--sunk)}
+.cal .rn{position:sticky;left:0;background:var(--surface);z-index:2;padding:8px 10px;font-weight:600;font-size:.88rem;display:flex;align-items:center}
+.cal .cell{cursor:pointer}
+.cal .cell:hover{background-color:var(--accent-soft)}
+.cal .cell.we{background-color:color-mix(in srgb,var(--sunk) 55%,transparent)}
+.bar{margin:6px 3px;border-radius:7px;padding:4px 8px;font-size:.78rem;font-weight:600;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;cursor:pointer;z-index:1;align-self:center;border:1px solid transparent}
+.bar.confirmed{background:var(--accent-soft);color:var(--accent);border-color:var(--accent)}
+.bar.checkedin{background:var(--accent);color:var(--accent-fg)}
+.bar.checkedout{background:var(--sunk);color:var(--muted);border-color:var(--line)}
+.bar{display:flex;align-items:baseline;gap:6px;padding:4px 6px}
+.bar .g{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis}
+.bar .t{flex:none;font-family:var(--f-num);font-size:.68rem}
+.bar small{font-weight:400;opacity:.85}
+.cal .cell{background-image:linear-gradient(to right,transparent calc(50% - .5px),color-mix(in srgb,var(--line) 60%,transparent) calc(50% - .5px),color-mix(in srgb,var(--line) 60%,transparent) calc(50% + .5px),transparent calc(50% + .5px))}
+.calnav{display:flex;gap:6px;align-items:center;flex-wrap:wrap}
+
+/* breakdown bars */
+.bk{display:grid;grid-template-columns:minmax(90px,140px) 1fr auto;gap:6px 10px;align-items:center;font-size:.88rem}
+.bk .track{height:10px;background:var(--sunk);border-radius:99px;overflow:hidden}
+.bk .fill{height:100%;background:var(--warm);border-radius:99px}
+
+/* dialog */
+dialog{border:1px solid var(--line);border-radius:14px;background:var(--surface);color:var(--fg);padding:0;width:min(560px,calc(100vw - 24px));max-height:calc(100vh - 32px)}
+dialog::backdrop{background:rgb(0 0 0 / .4)}
+.dlg{padding:20px;display:flex;flex-direction:column;gap:14px}
+.dlg h2{font-size:1.25rem}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+@media (max-width:480px){.grid2{grid-template-columns:1fr}}
+.fld{display:flex;flex-direction:column;gap:4px;min-width:0}
+.fld label{font-size:.78rem;color:var(--muted);font-weight:600}
+input,select,textarea{font:inherit;color:var(--fg);background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:8px 10px;width:100%;min-width:0}
+textarea{resize:vertical;min-height:60px}
+.calc{display:flex;gap:16px;flex-wrap:wrap;font-size:.88rem;background:var(--sunk);border-radius:8px;padding:10px 12px}
+.calc span b{font-family:var(--f-num);font-weight:500}
+.warnline{color:var(--bad);font-size:.86rem;font-weight:600}
+.actions{display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end}
+.actions .grow{flex:1}
+.pays{display:flex;flex-direction:column;gap:6px}
+.payrow{display:grid;grid-template-columns:1fr 1fr 1fr auto;gap:6px}
+@media (max-width:480px){.payrow{grid-template-columns:1fr 1fr}}
+.roomedit{display:flex;gap:6px}
+.toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(20px + env(safe-area-inset-bottom,0px));background:var(--fg);color:var(--bg);padding:10px 16px;border-radius:8px;font-weight:600;z-index:20}
+.filters{display:flex;gap:8px;flex-wrap:wrap}
+.filters select,.filters input{width:auto}
+/* meals */
+.step{display:inline-flex;align-items:center;border:1px solid var(--line);border-radius:8px;overflow:hidden;background:var(--surface)}
+.step button{font:inherit;font-weight:700;font-size:1.05rem;width:34px;height:34px;border:0;background:var(--sunk);color:var(--fg);cursor:pointer}
+.step button:hover{background:var(--accent-soft);color:var(--accent)}
+.step span{min-width:30px;text-align:center;font-family:var(--f-num);font-variant-numeric:tabular-nums}
+.step.on span{color:var(--accent);font-weight:600}
+.mealrow{display:grid;grid-template-columns:minmax(0,1fr) repeat(3,108px);gap:10px 14px;align-items:center;padding:10px 0;border-top:1px solid var(--line)}
+.mealrow.mealhead{border-top:0;padding-top:0}
+.mealrow .fam{min-width:0}
+@media (max-width:600px){.mealrow{grid-template-columns:repeat(3,1fr)}.mealrow .fam{grid-column:1/-1}.mealrow.mealhead .fam{display:none}}
+.ktot{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:10px}
+.ktot div{display:flex;flex-direction:column;background:var(--sunk);border-radius:8px;padding:8px 10px}
+.ktot .v{font-family:var(--f-num);font-size:1.5rem;font-variant-numeric:tabular-nums}
+.klist{display:flex;flex-direction:column;gap:4px}
+.mgrid{display:grid;grid-template-columns:minmax(0,1fr) repeat(3,minmax(52px,76px));gap:6px 8px;align-items:center;font-size:.88rem}
+.mgrid input{padding:6px 8px;text-align:center}
+.mfill{display:flex;flex-wrap:wrap;gap:6px 8px;align-items:center;margin-bottom:8px;font-size:.85rem}
+.mfill input{width:64px;padding:6px 8px;text-align:center}
+.grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+/* products */
+.prow{display:grid;grid-template-columns:minmax(0,1fr) 64px 72px 84px auto;gap:8px;align-items:center;padding:6px 0;border-top:1px solid var(--line)}
+.prow:first-child{border-top:0}
+.pq{display:flex;flex-direction:column;gap:2px;font-size:.75rem}
+.pq input{padding:6px;text-align:center}
+.prow .pa{text-align:right}
+@media (max-width:480px){.prow{grid-template-columns:1fr 1fr 1fr auto}.prow .pn{grid-column:1/-1}}
+/* bill */
+#billDlg{width:min(700px,calc(100vw - 24px))}
+.bill{border:1px solid var(--line);border-radius:10px;padding:18px;display:flex;flex-direction:column;gap:16px;background:var(--bg)}
+.bill .bh{display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap}
+.bill h3{font-family:var(--f-display);font-weight:700;font-size:1.35rem;margin:0}
+.bill .bno{text-align:right}
+.bill .bgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px}
+.bill tbody tr{cursor:default}
+.bill tbody tr:hover td{background:none}
+.bill td{padding:7px 10px}
+.bill tr.tot td{font-weight:700;border-top:2px solid var(--line)}
+.bill tr.due td{font-size:1.05rem;color:var(--warm)}
+.bill tr.due.ok td{color:var(--ok)}
+@media (prefers-reduced-motion:no-preference){.toast{animation:up .2s ease-out}@keyframes up{from{opacity:0;transform:translate(-50%,8px)}}}
+</style>
+</head>
+<body>
+
+<div id="loginWrap" class="loginwrap" hidden>
+  <form id="loginForm" class="panel loginbox">
+    <h1 id="loginTitle">Homestay Maintenance</h1>
+    <p class="meta" style="margin:0">Log in to manage bookings, meals and bills.</p>
+    <div class="fld"><label for="lUser">Username</label><input id="lUser" autocomplete="username" autocapitalize="none" required></div>
+    <div class="fld"><label for="lPass">Password</label><input id="lPass" type="password" autocomplete="current-password" required></div>
+    <div class="warnline" id="lErr" hidden></div>
+    <button class="btn primary" type="submit" id="lBtn">Log in</button>
+  </form>
+</div>
+
+<header>
+  <div class="wrap">
+    <div class="hrow">
+      <div>
+        <h1 id="appName">Homestay Maintenance</h1>
+        <div class="hsub" id="todayLine"></div>
+      </div>
+      <div class="grow"></div>
+      <button class="btn" id="logoutBtn" type="button">Log out</button>
+      <button class="btn" id="settingsBtn" type="button">Rooms &amp; settings</button>
+      <button class="btn primary" id="newBookingBtn" type="button">+ New booking</button>
+    </div>
+    <nav id="tabs">
+      <a href="#today">Today</a>
+      <a href="#meals">Meals</a>
+      <a href="#calendar">Calendar</a>
+      <a href="#bookings">Bookings</a>
+      <a href="#money">Payments &amp; expenses</a>
+    </nav>
+  </div>
+</header>
+
+<main class="wrap" id="main">
+  <div class="banner" id="offline" hidden>Cannot reach the server right now. Check your internet connection; changes may not be saved until it is back.</div>
+  <div class="empty" id="loading">Loading your bookings…</div>
+
+  <!-- TODAY -->
+  <section id="v-today" hidden>
+    <div style="display:flex;flex-direction:column;gap:20px">
+      <div class="stats" id="todayStats"></div>
+      <div class="cols">
+        <div class="panel"><div class="phead"><h2>Kitchen today</h2><span class="grow"></span><a class="btn small" href="#meals">Set meal counts</a></div><div id="kitchenToday"></div></div>
+        <div class="panel"><div class="phead"><h2>Arriving today</h2><span class="grow"></span><span class="label" id="arrCount"></span></div><div class="list" id="arrivals"></div></div>
+        <div class="panel"><div class="phead"><h2>Leaving today</h2><span class="grow"></span><span class="label" id="depCount"></span></div><div class="list" id="departures"></div></div>
+        <div class="panel"><div class="phead"><h2>Staying now</h2><span class="grow"></span><span class="label" id="inCount"></span></div><div class="list" id="inhouse"></div></div>
+        <div class="panel"><div class="phead"><h2>Balance due</h2><span class="grow"></span><span class="label num" id="dueTotal"></span></div><div class="list" id="dues"></div></div>
+      </div>
+      <div class="panel"><div class="phead"><h2>Next 7 days</h2></div><div class="list" id="upcoming"></div></div>
+    </div>
+  </section>
+
+  <!-- MEALS -->
+  <section id="v-meals" hidden>
+    <div style="display:flex;flex-direction:column;gap:20px">
+      <div class="phead" style="margin:0">
+        <h2 id="mealTitle">Meals</h2><span class="grow"></span>
+        <div class="calnav">
+          <button class="btn small" id="mlPrev" type="button">← Day</button>
+          <button class="btn small" id="mlToday" type="button">Today</button>
+          <button class="btn small" id="mlNext" type="button">Day →</button>
+        </div>
+      </div>
+      <div class="stats" id="mealStats"></div>
+      <div class="panel">
+        <div class="phead"><h2>Plates for each family</h2><span class="grow"></span><span class="meta">Tap − or + to change a count. It saves on its own.</span></div>
+        <div id="mealList"></div>
+      </div>
+      <div class="panel">
+        <div class="phead"><h2>Next 7 days</h2><span class="grow"></span><span class="meta">Tap a day to open it</span></div>
+        <div class="tablewrap"><table><thead><tr><th>Day</th><th class="r">Breakfast</th><th class="r">Lunch</th><th class="r">Dinner</th><th>Families</th></tr></thead><tbody id="mealWeek"></tbody></table></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- CALENDAR -->
+  <section id="v-calendar" hidden>
+    <div style="display:flex;flex-direction:column;gap:12px">
+      <div class="phead" style="margin:0">
+        <h2 id="calTitle">Room calendar</h2><span class="grow"></span>
+        <div class="calnav">
+          <button class="btn small" id="calPrev" type="button">← 2 weeks</button>
+          <button class="btn small" id="calToday" type="button">Today</button>
+          <button class="btn small" id="calNext" type="button">2 weeks →</button>
+        </div>
+      </div>
+      <div class="meta">Tap an empty day to book that room. Each bar starts at the check-in time and ends at the check-out time; the faint line in each day marks noon.</div>
+      <div class="calwrap"><div class="cal" id="cal"></div></div>
+    </div>
+  </section>
+
+  <!-- BOOKINGS -->
+  <section id="v-bookings" hidden>
+    <div class="panel">
+      <div class="phead">
+        <h2>All bookings</h2><span class="grow"></span>
+        <div class="filters">
+          <input id="fSearch" type="search" placeholder="Search guest or phone" aria-label="Search bookings">
+          <select id="fStatus" aria-label="Filter by status">
+            <option value="active">Upcoming &amp; staying</option>
+            <option value="all">All</option>
+            <option value="confirmed">Confirmed</option>
+            <option value="checkedin">Checked in</option>
+            <option value="checkedout">Checked out</option>
+            <option value="cancelled">Cancelled</option>
+          </select>
+        </div>
+      </div>
+      <div class="tablewrap">
+        <table>
+          <thead><tr><th>Guest</th><th>Room</th><th>Stay</th><th>Source</th><th>Status</th><th class="r">Total</th><th class="r">Due</th><th><span class="label" style="position:absolute;left:-9999px">Bill</span></th></tr></thead>
+          <tbody id="bookTable"></tbody>
+        </table>
+      </div>
+      <div class="empty" id="bookEmpty" hidden>No bookings match. Use “New booking” to add one.</div>
+    </div>
+  </section>
+
+  <!-- MONEY -->
+  <section id="v-money" hidden>
+    <div style="display:flex;flex-direction:column;gap:20px">
+      <div class="phead" style="margin:0">
+        <h2 id="moneyTitle">This month</h2><span class="grow"></span>
+        <div class="calnav">
+          <button class="btn small" id="mPrev" type="button">← Month</button>
+          <button class="btn small" id="mNow" type="button">This month</button>
+          <button class="btn small" id="mNext" type="button">Month →</button>
+          <button class="btn primary small" id="newExpBtn" type="button">+ Add expense</button>
+        </div>
+      </div>
+      <div class="stats" id="moneyStats"></div>
+      <div class="cols">
+        <div class="panel"><div class="phead"><h2>Payments received</h2></div><div class="tablewrap"><table><thead><tr><th>Date</th><th>Guest</th><th>Mode</th><th class="r">Amount</th></tr></thead><tbody id="payTable"></tbody></table></div><div class="empty" id="payEmpty" hidden>No payments recorded this month.</div></div>
+        <div class="panel"><div class="phead"><h2>Where the money went</h2></div><div class="bk" id="breakdown"></div><div class="empty" id="bkEmpty" hidden>No expenses this month yet.</div></div>
+      </div>
+      <div class="panel"><div class="phead"><h2>Expenses</h2></div><div class="tablewrap"><table><thead><tr><th>Date</th><th>Category</th><th>Note</th><th>Paid via</th><th class="r">Amount</th></tr></thead><tbody id="expTable"></tbody></table></div><div class="empty" id="expEmpty" hidden>Nothing spent this month. Add electricity, groceries, repairs or staff wages with “Add expense”.</div></div>
+    </div>
+  </section>
+</main>
+
+<!-- Booking dialog -->
+<dialog id="bDlg">
+  <form class="dlg" id="bForm" method="dialog">
+    <h2 id="bTitle">New booking</h2>
+    <div class="grid2">
+      <div class="fld"><label for="bGuest">Guest name</label><input id="bGuest" required></div>
+      <div class="fld"><label for="bPhone">Phone</label><input id="bPhone" inputmode="tel"></div>
+      <div class="fld"><label for="bRoom">Room</label><select id="bRoom"></select></div>
+      <div class="fld"><label for="bPax">Guests</label><input id="bPax" type="number" min="1" value="2"></div>
+      <div class="fld"><label for="bIn">Check-in</label><input id="bIn" type="date" required></div>
+      <div class="fld"><label for="bOut">Check-out</label><input id="bOut" type="date" required></div>
+      <div class="fld"><label for="bTIn">Check-in time</label><input id="bTIn" type="time" step="900"></div>
+      <div class="fld"><label for="bTOut">Check-out time</label><input id="bTOut" type="time" step="900"></div>
+      <div class="fld"><label for="bRate">Rate per night (₹)</label><input id="bRate" type="number" min="0" step="50"></div>
+      <div class="fld"><label for="bExtra">Extras: bonfire, pickup, trek (₹)</label><input id="bExtra" type="number" min="0" step="50" value="0"></div>
+      <div class="fld"><label for="bDisc">Discount on whole bill</label><div class="roomedit"><input id="bDisc" type="number" min="0" step="1" value="0"><select id="bDiscType" aria-label="Discount type" style="max-width:110px"><option value="amt">₹ amount</option><option value="pct">% of bill</option></select></div></div>
+      <div class="fld"><label for="bSource">Booked via</label><select id="bSource"></select></div>
+      <div class="fld"><label for="bStatus">Status</label><select id="bStatus">
+        <option value="confirmed">Confirmed</option><option value="checkedin">Checked in</option>
+        <option value="checkedout">Checked out</option><option value="cancelled">Cancelled</option></select></div>
+    </div>
+    <div class="warnline" id="bClash" hidden></div>
+    <div class="calc" id="bCalc"></div>
+    <div class="fld">
+      <label>Payments received</label>
+      <div class="pays" id="bPays"></div>
+      <div><button class="btn small" id="addPay" type="button">+ Record payment</button></div>
+    </div>
+    <div class="fld">
+      <label>Meals for this family (plates per day)</label>
+      <div class="mfill">
+        <span class="meta">Same every day:</span>
+        <input id="mfB" type="number" min="0" placeholder="B" aria-label="Breakfast plates every day">
+        <input id="mfL" type="number" min="0" placeholder="L" aria-label="Lunch plates every day">
+        <input id="mfD" type="number" min="0" placeholder="D" aria-label="Dinner plates every day">
+        <button class="btn small" id="mfApply" type="button">Apply to all days</button>
+      </div>
+      <div class="mgrid" id="bMeals"></div>
+    </div>
+    <div class="fld">
+      <label for="pPick">Products bought</label>
+      <div class="mfill">
+        <select id="pPick" style="flex:1;min-width:170px;width:auto"></select>
+        <input id="pQty" type="number" min="1" value="1" aria-label="Number of packs">
+        <button class="btn small" id="pAdd" type="button">Add to bill</button>
+      </div>
+      <div id="bProds"></div>
+    </div>
+    <div class="fld"><label for="bNotes">Notes</label><textarea id="bNotes" placeholder="ID checked, veg meals, arriving late…"></textarea></div>
+    <div class="actions">
+      <button class="btn danger" id="bDelete" type="button" hidden>Delete</button>
+      <span class="grow"></span>
+      <button class="btn" id="bCancel" type="button">Cancel</button>
+      <button class="btn" id="bBill" type="button">Save &amp; make bill</button>
+      <button class="btn primary" id="bSave" type="submit">Save booking</button>
+    </div>
+  </form>
+</dialog>
+
+<!-- Bill dialog -->
+<dialog id="billDlg">
+  <div class="dlg">
+    <div class="bill" id="billBody"></div>
+    <textarea id="billText" rows="8" aria-label="Bill text to copy" hidden></textarea>
+    <div class="warnline" id="billErr" hidden></div>
+    <div class="actions">
+      <button class="btn" id="billEdit" type="button">Edit booking</button>
+      <span class="grow"></span>
+      <button class="btn" id="billCopy" type="button">Copy for WhatsApp</button>
+      <button class="btn primary" id="billPdf" type="button">Download PDF</button>
+      <button class="btn" id="billClose" type="button">Close</button>
+    </div>
+  </div>
+</dialog>
+
+<!-- Expense dialog -->
+<dialog id="eDlg">
+  <form class="dlg" id="eForm" method="dialog">
+    <h2 id="eTitle">Add expense</h2>
+    <div class="grid2">
+      <div class="fld"><label for="eDate">Date</label><input id="eDate" type="date" required></div>
+      <div class="fld"><label for="eAmt">Amount (₹)</label><input id="eAmt" type="number" min="0" step="1" required></div>
+      <div class="fld"><label for="eCat">Category</label><select id="eCat"></select></div>
+      <div class="fld"><label for="eMode">Paid via</label><select id="eMode"></select></div>
+    </div>
+    <div class="fld"><label for="eNote">Note</label><input id="eNote" placeholder="e.g. BESCOM bill, plumber for Room 3 tap"></div>
+    <div class="actions">
+      <button class="btn danger" id="eDelete" type="button" hidden>Delete</button>
+      <span class="grow"></span>
+      <button class="btn" id="eCancel" type="button">Cancel</button>
+      <button class="btn primary" type="submit">Save expense</button>
+    </div>
+  </form>
+</dialog>
+
+<!-- Settings dialog -->
+<dialog id="sDlg">
+  <form class="dlg" id="sForm" method="dialog">
+    <h2>Rooms &amp; settings</h2>
+    <div class="fld"><label for="sName">Homestay name</label><input id="sName"></div>
+    <div class="grid2">
+      <div class="fld"><label for="sTIn">Standard check-in time</label><input id="sTIn" type="time" step="900"></div>
+      <div class="fld"><label for="sTOut">Standard check-out time</label><input id="sTOut" type="time" step="900"></div>
+    </div>
+    <div class="fld"><label>Rooms and default nightly rate (₹)</label><div class="pays" id="sRooms"></div>
+      <div><button class="btn small" id="addRoom" type="button">+ Add room</button></div></div>
+    <div class="fld"><label>Products you sell: name, pack size, price (₹)</label><div class="pays" id="sProds"></div>
+      <div><button class="btn small" id="addProd" type="button">+ Add product</button></div></div>
+    <div class="fld"><label>Meal price per plate (₹). Keep 0 if meals are included in the room rate.</label>
+      <div class="grid3">
+        <div class="fld"><label for="sMB">Breakfast</label><input id="sMB" type="number" min="0" step="10"></div>
+        <div class="fld"><label for="sML">Lunch</label><input id="sML" type="number" min="0" step="10"></div>
+        <div class="fld"><label for="sMD">Dinner</label><input id="sMD" type="number" min="0" step="10"></div>
+      </div></div>
+    <div class="fld"><label for="sAddr">Address (printed on bills)</label><textarea id="sAddr" rows="2"></textarea></div>
+    <div class="grid2">
+      <div class="fld"><label for="sPhone">Phone on bills</label><input id="sPhone" inputmode="tel"></div>
+      <div class="fld"><label for="sUpi">UPI ID for payments</label><input id="sUpi" placeholder="name@okaxis"></div>
+      <div class="fld"><label for="sGstin">GSTIN (leave blank if not registered)</label><input id="sGstin"></div>
+      <div class="fld"><label for="sGst">GST % on bills (0 = no GST)</label><input id="sGst" type="number" min="0" max="28" step="0.5"></div>
+    </div>
+    <div class="fld"><label for="sNote">Note at the bottom of bills</label><input id="sNote" placeholder="Thank you for staying with us!"></div>
+    <div class="fld"><label>Logins for you and your staff</label><div class="pays" id="sUsers"></div>
+      <div class="roomedit"><input id="nuName" placeholder="Name" aria-label="New login name"><input id="nuUser" placeholder="Username" autocomplete="off" autocapitalize="none" aria-label="New username"><input id="nuPass" type="password" placeholder="Password (8+)" autocomplete="new-password" aria-label="New password"><button class="btn small" id="nuAdd" type="button">Add login</button></div></div>
+    <div class="fld"><label>Change my password</label>
+      <div class="roomedit"><input id="cpOld" type="password" placeholder="Current password" autocomplete="current-password" aria-label="Current password"><input id="cpNew" type="password" placeholder="New password (8+)" autocomplete="new-password" aria-label="New password"><button class="btn small" id="cpGo" type="button">Change password</button></div></div>
+    <div class="actions"><span class="grow"></span><button class="btn" id="sCancel" type="button">Cancel</button><button class="btn primary" type="submit">Save settings</button></div>
+  </form>
+</dialog>
+
+<script src="assets/jspdf.umd.min.js"></script>
+<script>
+(function(){
+const SOURCES=["Direct / phone","WhatsApp","Airbnb","Booking.com","MakeMyTrip","Goibibo","Agoda","Walk-in","Referral"];
+const MODES=["UPI","Cash","Card","Bank transfer","OTA payout"];
+const CATS=["Housekeeping","Laundry","Electricity","Water","Gas / LPG","Groceries & kitchen","Repairs & maintenance","Staff wages","OTA commission","Internet","Toiletries & linen","Other"];
+const DEFAULT_ROOMS=[{id:"r1",name:"Room 1",rate:2500},{id:"r2",name:"Room 2",rate:2500},{id:"r3",name:"Room 3",rate:2500},{id:"r4",name:"Room 4",rate:3000},{id:"r5",name:"Room 5",rate:3500}];
+const DEFAULT_PRODUCTS=[
+  {id:"p1",name:"Turmeric",unit:"250 g",price:120},{id:"p2",name:"Coconut oil",unit:"1 L",price:450},
+  {id:"p3",name:"Coffee powder",unit:"1 kg",price:640},{id:"p4",name:"Pepper",unit:"250 g",price:260},
+  {id:"p5",name:"Cardamom",unit:"250 g",price:500},{id:"p6",name:"Millets powder",unit:"500 g",price:300},
+  {id:"p7",name:"Mango pickle",unit:"1 kg",price:550},{id:"p8",name:"Red rice",unit:"1 kg",price:75}];
+const STATUS={confirmed:"Confirmed",checkedin:"Checked in",checkedout:"Checked out",cancelled:"Cancelled"};
+
+const $=id=>document.getElementById(id);
+const esc=s=>String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const inr=n=>"₹"+Math.round(n||0).toLocaleString("en-IN");
+const pad=n=>String(n).padStart(2,"0");
+const iso=d=>d.getFullYear()+"-"+pad(d.getMonth()+1)+"-"+pad(d.getDate());
+const parse=s=>{const[y,m,d]=s.split("-").map(Number);return new Date(y,m-1,d)};
+const addDays=(s,n)=>{const d=parse(s);d.setDate(d.getDate()+n);return iso(d)};
+const nights=(a,b)=>Math.max(0,Math.round((parse(b)-parse(a))/864e5));
+const fmtD=s=>parse(s).toLocaleDateString("en-IN",{day:"numeric",month:"short"});
+const fmtDW=s=>parse(s).toLocaleDateString("en-IN",{weekday:"short",day:"numeric",month:"short"});
+const TODAY=iso(new Date());
+
+let CSRF="",ME=null;
+async function api(path,opts={}){
+  const o={method:opts.method||"GET",headers:{},credentials:"same-origin"};
+  if(opts.body!==undefined){o.headers["Content-Type"]="application/json";o.body=JSON.stringify(opts.body)}
+  if(o.method!=="GET")o.headers["X-CSRF-Token"]=CSRF;
+  let r;try{r=await fetch("api/"+path,o)}catch(e){$("offline").hidden=false;throw {code:"net",message:"Cannot reach the server. Check your internet connection."}}
+  let j=null;try{j=await r.json()}catch(e){}
+  if(r.status===401&&!path.startsWith("auth.php")){showLogin();throw {code:"auth",message:"Please log in again."}}
+  if(!r.ok)throw {code:r.status,message:(j&&j.error)||"Something went wrong. Try again."};
+  $("offline").hidden=true;return j;
+}
+const MEALS=[["b","Breakfast"],["l","Lunch"],["d","Dinner"]];
+const state={settings:{name:"Homestay Maintenance",rooms:DEFAULT_ROOMS,mealRates:{b:0,l:0,d:0},checkInTime:"12:00",checkOutTime:"11:00",products:DEFAULT_PRODUCTS},bookings:[],expenses:[]};
+let mealDay=TODAY;
+let calStart=addDays(TODAY,-2);
+let moneyMonth=TODAY.slice(0,7);
+
+const roomName=id=>(state.settings.rooms.find(r=>r.id===id)||{name:"(removed room)"}).name;
+const paid=b=>(b.payments||[]).reduce((s,p)=>s+(+p.amount||0),0);
+const stayDays=b=>{const out=[];if(!b.checkIn||!b.checkOut||b.checkOut<b.checkIn)return out;for(let d=b.checkIn;d<=b.checkOut&&out.length<60;d=addDays(d,1))out.push(d);return out};
+const mealsOn=(b,day)=>(b.meals&&b.meals[day])||{};
+const mealCost=b=>{const r=state.settings.mealRates||{};let s=0;Object.entries(b.meals||{}).forEach(([day,m])=>{if(day<b.checkIn||day>b.checkOut)return;MEALS.forEach(([k])=>s+=(+m[k]||0)*(+r[k]||0))});return s};
+const roomAmt=b=>nights(b.checkIn,b.checkOut)*(+b.rate||0);
+const mealPlates=b=>{const t={b:0,l:0,d:0};Object.entries(b.meals||{}).forEach(([day,m])=>{if(day<b.checkIn||day>b.checkOut)return;MEALS.forEach(([k])=>t[k]+=+m[k]||0)});return t};
+const prodNet=p=>(+p.qty||0)*(+p.price||0)*(1-Math.min(100,Math.max(0,+p.disc||0))/100);
+const prodAmt=b=>(b.purchases||[]).reduce((s,p)=>s+prodNet(p),0);
+const stayAmt=b=>roomAmt(b)+mealCost(b)+(+b.extras||0);
+const grossAmt=b=>stayAmt(b)+prodAmt(b);
+const discAmt=b=>{const g=grossAmt(b),v=Math.max(0,+b.discount||0);return Math.min(g,b.discType==="pct"?Math.round(g*Math.min(100,v)/100):v)};
+const subTotal=b=>Math.max(0,grossAmt(b)-discAmt(b));
+const gstAmt=b=>{const g=grossAmt(b),s=stayAmt(b);if(!g)return 0;return Math.round(Math.max(0,s-discAmt(b)*s/g)*(+state.settings.gstRate||0)/100)};
+const total=b=>subTotal(b)+gstAmt(b);
+const amt=(n,cur="₹",minus="−")=>(n<0?minus:"")+cur+Math.abs(Math.round(n||0)).toLocaleString("en-IN");
+const fmtLong=s=>s?parse(s).toLocaleDateString("en-IN",{day:"numeric",month:"short",year:"numeric"}):"";
+const due=b=>b.status==="cancelled"?0:Math.max(0,total(b)-paid(b));
+const live=b=>b.status!=="cancelled";
+const isEx=b=>!!b.example;
+const defIn=()=>state.settings.checkInTime||"12:00",defOut=()=>state.settings.checkOutTime||"11:00";
+const tIn=b=>b.checkInTime||defIn(),tOut=b=>b.checkOutTime||defOut();
+const fmtT=t=>{if(!t)return"";const[h,m]=t.split(":").map(Number);return new Date(2000,0,1,h,m).toLocaleTimeString("en-IN",{hour:"numeric",minute:"2-digit"}).replace(/\s?(am|pm)/i,(x,p)=>" "+p.toLowerCase())};
+const frac=t=>{const[h,m]=(t||"12:00").split(":").map(Number);return Math.min(1,Math.max(0,(h*60+(m||0))/1440))};
+
+function toast(msg){const t=document.createElement("div");t.className="toast";t.textContent=msg;document.body.appendChild(t);setTimeout(()=>t.remove(),2200)}
+
+/* ---------- routing ---------- */
+const VIEWS=["today","meals","calendar","bookings","money"];
+function route(){
+  const v=VIEWS.includes(location.hash.slice(1))?location.hash.slice(1):"today";
+  VIEWS.forEach(x=>$("v-"+x).hidden=x!==v||!ready);
+  document.querySelectorAll("#tabs a").forEach(a=>{if(a.getAttribute("href")==="#"+v)a.setAttribute("aria-current","page");else a.removeAttribute("aria-current")});
+}
+window.addEventListener("hashchange",route);
+let ready=false;
+
+/* ---------- render ---------- */
+function render(){
+  $("appName").textContent=state.settings.name||"Homestay Maintenance";document.title=state.settings.name||"Homestay Maintenance";
+  $("todayLine").textContent=fmtDW(TODAY)+" · "+state.settings.rooms.length+" rooms";
+  renderToday();renderMeals();renderCal();renderBookings();renderMoney();route();
+}
+function rowHTML(b,right){
+  return `<div class="row" data-b="${esc(b.id)}"><div><div class="who">${esc(b.guest)} ${isEx(b)?'<span class="pill p-ex">example</span>':""}</div><div class="meta">${esc(roomName(b.room))} · ${fmtD(b.checkIn)} ${fmtT(tIn(b))} → ${fmtD(b.checkOut)} ${fmtT(tOut(b))} · ${nights(b.checkIn,b.checkOut)}N${b.phone?" · "+esc(b.phone):""}</div></div><div>${right||""}</div></div>`;
+}
+function fill(id,list,right,emptyMsg){$(id).innerHTML=list.length?list.map(b=>rowHTML(b,right(b))).join(""):`<div class="empty">${emptyMsg}</div>`}
+function statusPill(b){return `<span class="pill p-${b.status}">${STATUS[b.status]}</span>`}
+function duePill(b){const d=due(b);return d>0?`<span class="pill p-due num">${inr(d)} due</span>`:`<span class="pill p-paid">Paid</span>`}
+
+function renderToday(){
+  const L=state.bookings.filter(live);
+  const arr=L.filter(b=>b.checkIn===TODAY).sort((a,b)=>tIn(a).localeCompare(tIn(b)));
+  const dep=L.filter(b=>b.checkOut===TODAY).sort((a,b)=>tOut(a).localeCompare(tOut(b)));
+  const inh=L.filter(b=>b.checkIn<=TODAY&&b.checkOut>TODAY);
+  const dues=L.filter(b=>due(b)>0&&b.checkIn<=addDays(TODAY,7)).sort((a,b)=>a.checkIn.localeCompare(b.checkIn));
+  const up=L.filter(b=>b.checkIn>TODAY&&b.checkIn<=addDays(TODAY,7)).sort((a,b)=>a.checkIn.localeCompare(b.checkIn));
+  // month occupancy
+  const m=TODAY.slice(0,7),ms=m+"-01",me=iso(new Date(+m.slice(0,4),+m.slice(5,7),1));
+  const days=nights(ms,me),cap=days*state.settings.rooms.length;
+  let occ=0;L.forEach(b=>{const s=b.checkIn>ms?b.checkIn:ms,e=b.checkOut<me?b.checkOut:me;occ+=nights(s,e)*(s<e?1:0)});
+  const free=state.settings.rooms.length-inh.length;
+  const rcv=state.bookings.flatMap(b=>(b.payments||[]).filter(p=>(p.date||"").startsWith(m))).reduce((s,p)=>s+(+p.amount||0),0);
+  $("todayStats").innerHTML=[
+    ["Rooms free tonight",`${Math.max(0,free)} / ${state.settings.rooms.length}`,inh.length+" occupied"],
+    ["Occupancy this month",cap?Math.round(occ/cap*100)+"%":"–",`${occ} of ${cap} room-nights`],
+    ["Received this month",inr(rcv),"payments logged"],
+    ["Balance due",inr(L.reduce((s,b)=>s+due(b),0)),"across all active stays"]
+  ].map(([l,v,s])=>`<div class="stat"><span class="label">${l}</span><span class="v">${v}</span><span class="s">${s}</span></div>`).join("");
+  $("arrCount").textContent=arr.length;$("depCount").textContent=dep.length;$("inCount").textContent=inh.length;
+  $("dueTotal").textContent=inr(dues.reduce((s,b)=>s+due(b),0));
+  fill("arrivals",arr,b=>b.status==="confirmed"?`<button class="btn small primary" data-act="checkin" data-id="${esc(b.id)}" type="button">Check in</button>`:statusPill(b),"No arrivals today.");
+  fill("departures",dep,b=>`<div style="display:flex;gap:6px;align-items:center"><button class="btn small" data-act="bill" data-id="${esc(b.id)}" type="button">Bill</button>${b.status!=="checkedout"?`<button class="btn small" data-act="checkout" data-id="${esc(b.id)}" type="button">Check out</button>`:statusPill(b)}</div>`,"No check-outs today.");
+  fill("inhouse",inh,duePill,"No guests staying right now.");
+  fill("dues",dues,duePill,"Everyone due in the next week has paid.");
+  fill("upcoming",up,b=>`<span class="meta">${fmtDW(b.checkIn)}</span>`,"Nothing booked for the coming week.");
+  const kt=dayTotals(TODAY),kf=onDay(TODAY).filter(b=>MEALS.some(([k])=>+mealsOn(b,TODAY)[k]));
+  $("kitchenToday").innerHTML=`<div class="ktot">${MEALS.map(([k,n])=>`<div><span class="label">${n}</span><span class="v">${kt[k]}</span></div>`).join("")}</div>`+
+    (kf.length?`<div class="klist">${kf.map(b=>{const m=mealsOn(b,TODAY);return `<div class="meta"><b style="color:var(--fg)">${esc(b.guest)}</b> · ${esc(roomName(b.room))} — B ${m.b||0} · L ${m.l||0} · D ${m.d||0}</div>`}).join("")}</div>`:`<div class="empty">No meals set for today yet.</div>`);
+}
+
+const onDay=day=>state.bookings.filter(b=>live(b)&&b.checkIn<=day&&b.checkOut>=day);
+const dayTotals=day=>{const t={b:0,l:0,d:0};onDay(day).forEach(b=>{const m=mealsOn(b,day);MEALS.forEach(([k])=>t[k]+=+m[k]||0)});return t};
+const roomIdx=id=>state.settings.rooms.findIndex(r=>r.id===id);
+function renderMeals(){
+  $("mealTitle").textContent="Meals · "+fmtDW(mealDay)+(mealDay===TODAY?" (today)":"");
+  const t=dayTotals(mealDay),fams=onDay(mealDay).sort((a,b)=>roomIdx(a.room)-roomIdx(b.room));
+  const r=state.settings.mealRates||{};
+  $("mealStats").innerHTML=MEALS.map(([k,n])=>`<div class="stat"><span class="label">${n}</span><span class="v">${t[k]}</span><span class="s">plates${+r[k]?" · "+inr(t[k]*r[k]):""}</span></div>`).join("")+
+    `<div class="stat"><span class="label">Families in house</span><span class="v">${fams.length}</span><span class="s">${fams.reduce((s,b)=>s+(+b.pax||0),0)} guests</span></div>`;
+  $("mealList").innerHTML=fams.length?`<div class="mealrow mealhead"><span class="label fam">Family</span>${MEALS.map(([,n])=>`<span class="label">${n}</span>`).join("")}</div>`+
+    fams.map(b=>{const m=mealsOn(b,mealDay),tag=b.checkIn===mealDay?"arrives":b.checkOut===mealDay?"leaves":"";
+      return `<div class="mealrow"><div class="fam"><div class="who">${esc(b.guest)} ${isEx(b)?'<span class="pill p-ex">example</span>':""}</div><div class="meta">${esc(roomName(b.room))} · ${b.pax||"?"} guests${tag?" · "+tag+" this day":""}</div></div>`+
+      MEALS.map(([k,n])=>{const v=+m[k]||0;return `<div class="step${v?" on":""}" role="group" aria-label="${n} for ${esc(b.guest)}"><button type="button" data-meal="${k}" data-id="${esc(b.id)}" data-delta="-1" aria-label="One less ${n}">−</button><span>${v}</span><button type="button" data-meal="${k}" data-id="${esc(b.id)}" data-delta="1" aria-label="One more ${n}">+</button></div>`}).join("")+`</div>`}).join("")
+    :`<div class="empty">No families staying on this day.</div>`;
+  $("mealWeek").innerHTML=[...Array(7)].map((_,i)=>{const d=addDays(TODAY,i),tt=dayTotals(d),f=onDay(d);
+    return `<tr data-mday="${d}"${d===mealDay?' style="font-weight:600"':""}><td style="white-space:nowrap">${fmtDW(d)}</td><td class="r num">${tt.b}</td><td class="r num">${tt.l}</td><td class="r num">${tt.d}</td><td class="meta">${f.map(b=>esc(b.guest)).join(", ")||"–"}</td></tr>`}).join("");
+}
+const pendingSave={},saveTimers={};
+function queueSave(b){pendingSave[b.id]=b;clearTimeout(saveTimers[b.id]);saveTimers[b.id]=setTimeout(()=>{const x=pendingSave[b.id];delete pendingSave[b.id];saveDoc("bookings",x)},700)}
+
+function renderCal(){
+  const N=14,rooms=state.settings.rooms;
+  const days=[...Array(N)].map((_,i)=>addDays(calStart,i));
+  const end=addDays(calStart,N);
+  $("calTitle").textContent=`${fmtD(days[0])} – ${fmtD(days[N-1])}`;
+  const cal=$("cal");
+  cal.style.gridTemplateColumns=`minmax(96px,130px) repeat(${N},minmax(58px,1fr))`;
+  cal.style.gridTemplateRows=`auto repeat(${rooms.length},minmax(52px,auto))`;
+  let h=`<div class="c hd rn" style="grid-row:1;grid-column:1">Room</div>`;
+  days.forEach((d,i)=>{const dt=parse(d),we=dt.getDay()===0||dt.getDay()===6;
+    h+=`<div class="c hd${we?" we":""}${d===TODAY?" today":""}" style="grid-row:1;grid-column:${i+2}">${dt.toLocaleDateString("en-IN",{weekday:"short"})}<b>${dt.getDate()}</b></div>`});
+  rooms.forEach((r,ri)=>{
+    h+=`<div class="c rn" style="grid-row:${ri+2};grid-column:1">${esc(r.name)}</div>`;
+    days.forEach((d,i)=>{const dt=parse(d),we=dt.getDay()===0||dt.getDay()===6;
+      h+=`<div class="c cell${we?" we":""}" data-room="${esc(r.id)}" data-day="${d}" style="grid-row:${ri+2};grid-column:${i+2}" title="Book ${esc(r.name)} from ${fmtD(d)}"></div>`});
+    state.bookings.filter(b=>live(b)&&b.room===r.id&&b.checkIn<end&&b.checkOut>=calStart).forEach(b=>{
+      const cut0=b.checkIn<calStart,cut1=b.checkOut>=end;
+      const s=cut0?0:nights(calStart,b.checkIn),ei=cut1?N-1:nights(calStart,b.checkOut),k=ei-s+1;
+      const f0=cut0?0:frac(tIn(b)),f1=cut1?1:frac(tOut(b));
+      const ml=(f0/k*100).toFixed(3),mr=((1-f1)/k*100).toFixed(3);
+      h+=`<div class="bar ${b.status}" data-b="${esc(b.id)}" style="grid-row:${ri+2};grid-column:${s+2}/${ei+3};margin-left:calc(${ml}% + 2px);margin-right:calc(${mr}% + 2px)" title="${esc(b.guest)} · in ${fmtD(b.checkIn)} ${fmtT(tIn(b))} → out ${fmtD(b.checkOut)} ${fmtT(tOut(b))}">`+
+        `${cut0?"":`<small class="t">${fmtT(tIn(b))}</small>`}<span class="g">${esc(b.guest)}${due(b)>0?` <small>· ${inr(due(b))} due</small>`:""}</span>${cut1?"":`<small class="t">${fmtT(tOut(b))}</small>`}</div>`;
+    });
+  });
+  cal.innerHTML=h;
+}
+
+function renderBookings(){
+  const q=$("fSearch").value.trim().toLowerCase(),f=$("fStatus").value;
+  let L=state.bookings.filter(b=>{
+    if(q&&!((b.guest||"").toLowerCase().includes(q)||(b.phone||"").includes(q)))return false;
+    if(f==="active")return live(b)&&b.status!=="checkedout"&&b.checkOut>=TODAY;
+    if(f==="all")return true;return b.status===f;
+  }).sort((a,b)=>f==="active"?a.checkIn.localeCompare(b.checkIn):b.checkIn.localeCompare(a.checkIn));
+  $("bookTable").innerHTML=L.map(b=>`<tr data-b="${esc(b.id)}"><td><b>${esc(b.guest)}</b> ${isEx(b)?'<span class="pill p-ex">example</span>':""}<div class="meta">${esc(b.phone||"")}${b.pax?" · "+b.pax+" guests":""}</div></td><td>${esc(roomName(b.room))}</td><td class="num" style="white-space:nowrap">${fmtD(b.checkIn)} → ${fmtD(b.checkOut)}<div class="meta">${nights(b.checkIn,b.checkOut)} nights · in ${fmtT(tIn(b))}, out ${fmtT(tOut(b))}</div></td><td>${esc(b.source||"")}</td><td>${statusPill(b)}</td><td class="r num">${inr(total(b))}</td><td class="r num">${due(b)>0?`<span style="color:var(--warm)">${inr(due(b))}</span>`:"–"}</td><td><button class="btn small" data-act="bill" data-id="${esc(b.id)}" type="button">Bill</button></td></tr>`).join("");
+  $("bookEmpty").hidden=L.length>0;
+}
+
+function renderMoney(){
+  const m=moneyMonth;
+  $("moneyTitle").textContent=new Date(+m.slice(0,4),+m.slice(5)-1,1).toLocaleDateString("en-IN",{month:"long",year:"numeric"});
+  const pays=state.bookings.flatMap(b=>(b.payments||[]).filter(p=>(p.date||"").startsWith(m)).map(p=>({...p,b}))).sort((a,b)=>b.date.localeCompare(a.date));
+  const exps=state.expenses.filter(e=>(e.date||"").startsWith(m)).sort((a,b)=>b.date.localeCompare(a.date));
+  const inc=pays.reduce((s,p)=>s+(+p.amount||0),0),out=exps.reduce((s,e)=>s+(+e.amount||0),0);
+  const byMode={};pays.forEach(p=>byMode[p.mode]=(byMode[p.mode]||0)+(+p.amount||0));
+  const topMode=Object.entries(byMode).sort((a,b)=>b[1]-a[1])[0];
+  const sold=state.bookings.filter(live).flatMap(b=>(b.purchases||[]).filter(p=>(p.date||b.checkIn).startsWith(m)));
+  const ps=sold.reduce((s,p)=>s+prodNet(p),0),pc=sold.reduce((s,p)=>s+(+p.qty||0),0);
+  $("moneyStats").innerHTML=[
+    ["Money in",inr(inc),pays.length+" payments"+(topMode?" · mostly "+topMode[0]:"")],
+    ["Products sold",inr(ps),pc+" pack"+(pc===1?"":"s")+" added to bills"],
+    ["Money out",inr(out),exps.length+" expenses"],
+    ["Net",`<span style="color:${inc-out>=0?"var(--ok)":"var(--bad)"}">${inr(inc-out)}</span>`,inc-out>=0?"surplus":"spent more than received"]
+  ].map(([l,v,s])=>`<div class="stat"><span class="label">${l}</span><span class="v">${v}</span><span class="s">${s}</span></div>`).join("");
+  $("payTable").innerHTML=pays.map(p=>`<tr data-b="${esc(p.b.id)}"><td class="num">${fmtD(p.date)}</td><td>${esc(p.b.guest)}<div class="meta">${esc(roomName(p.b.room))}</div></td><td>${esc(p.mode||"")}</td><td class="r num">${inr(p.amount)}</td></tr>`).join("");
+  $("payEmpty").hidden=pays.length>0;
+  const byCat={};exps.forEach(e=>byCat[e.category]=(byCat[e.category]||0)+(+e.amount||0));
+  const cats=Object.entries(byCat).sort((a,b)=>b[1]-a[1]),max=cats.length?cats[0][1]:1;
+  $("breakdown").innerHTML=cats.map(([c,v])=>`<span>${esc(c)}</span><span class="track"><span class="fill" style="display:block;width:${Math.max(3,v/max*100)}%"></span></span><span class="num">${inr(v)}</span>`).join("");
+  $("bkEmpty").hidden=cats.length>0;
+  $("expTable").innerHTML=exps.map(e=>`<tr data-e="${esc(e.id)}"><td class="num">${fmtD(e.date)}</td><td>${esc(e.category)} ${e.example?'<span class="pill p-ex">example</span>':""}</td><td>${esc(e.note||"")}</td><td>${esc(e.mode||"")}</td><td class="r num">${inr(e.amount)}</td></tr>`).join("");
+  $("expEmpty").hidden=exps.length>0;
+}
+
+/* ---------- persistence ---------- */
+const uid=()=>Date.now().toString(36)+Math.random().toString(36).slice(2,7);
+async function saveDoc(col,obj){
+  try{const saved=await api(col+".php",{method:"POST",body:obj});
+    const arr=col==="bookings"?state.bookings:state.expenses;const i=arr.findIndex(x=>x.id===saved.id);if(i>=0)arr[i]=saved;else arr.push(saved);render();return saved}
+  catch(e){if(e.code!=="auth")toast(e.message||"Could not save. Try again.");return false}
+}
+async function delDoc(col,id){
+  try{await api(col+".php?id="+encodeURIComponent(id),{method:"DELETE"});
+    const arr=col==="bookings"?state.bookings:state.expenses;const i=arr.findIndex(x=>x.id===id);if(i>=0)arr.splice(i,1);render();return true}
+  catch(e){if(e.code!=="auth")toast(e.message||"Could not delete. Try again.");return false}
+}
+
+/* ---------- booking dialog ---------- */
+let editing=null,delArmed=false;
+function opts(sel,list,val){sel.innerHTML=list.map(x=>typeof x==="string"?`<option${x===val?" selected":""}>${esc(x)}</option>`:`<option value="${esc(x.id)}"${x.id===val?" selected":""}>${esc(x.name)}</option>`).join("")}
+function payRow(p={}){
+  const d=document.createElement("div");d.className="payrow";
+  d.innerHTML=`<input type="number" min="0" placeholder="Amount ₹" class="pAmt" aria-label="Payment amount" value="${esc(p.amount??"")}"><input type="date" class="pDate" aria-label="Payment date" value="${esc(p.date||TODAY)}"><select class="pMode" aria-label="Payment mode"></select><button class="btn small" type="button" aria-label="Remove payment">✕</button>`;
+  opts(d.querySelector(".pMode"),MODES,p.mode||"UPI");
+  d.querySelector("button").onclick=()=>{d.remove();calc()};
+  d.querySelectorAll("input,select").forEach(i=>i.addEventListener("input",calc));
+  $("bPays").appendChild(d);
+}
+function readForm(){
+  const ds=new Set(stayDays({checkIn:$("bIn").value,checkOut:$("bOut").value})),meals={};
+  Object.entries(dlgMeals).forEach(([d,m])=>{if(ds.has(d)&&MEALS.some(([k])=>+m[k]))meals[d]={b:+m.b||0,l:+m.l||0,d:+m.d||0}});
+  return {...(editing||{}),guest:$("bGuest").value.trim(),phone:$("bPhone").value.trim(),room:$("bRoom").value,pax:+$("bPax").value||1,
+    discount:Math.max(0,+$("bDisc").value||0),discType:$("bDiscType").value,
+    purchases:dlgProds.filter(p=>+p.qty>0).map(p=>({pid:p.pid,name:p.name,unit:p.unit,price:+p.price||0,qty:+p.qty||0,disc:Math.min(100,Math.max(0,+p.disc||0)),date:p.date||TODAY})),checkIn:$("bIn").value,checkOut:$("bOut").value,checkInTime:$("bTIn").value||defIn(),checkOutTime:$("bTOut").value||defOut(),rate:+$("bRate").value||0,extras:+$("bExtra").value||0,source:$("bSource").value,status:$("bStatus").value,
+    notes:$("bNotes").value.trim(),payments:[...$("bPays").querySelectorAll(".payrow")].map(r=>({amount:+r.querySelector(".pAmt").value||0,date:r.querySelector(".pDate").value,mode:r.querySelector(".pMode").value})).filter(p=>p.amount>0),meals};
+}
+function calc(){
+  const b=readForm(),n=b.checkIn&&b.checkOut?nights(b.checkIn,b.checkOut):0;
+  $("bCalc").innerHTML=`<span>${n} night${n===1?"":"s"} × ${inr(b.rate)}${b.extras?` + ${inr(b.extras)} extras`:""}${mealCost(b)?` + ${inr(mealCost(b))} meals`:""}${prodAmt(b)?` + ${inr(prodAmt(b))} products`:""}${discAmt(b)?` − ${inr(discAmt(b))} discount`:""}${gstAmt(b)?` + ${inr(gstAmt(b))} GST`:""}</span><span>Total <b>${inr(total(b))}</b></span><span>Paid <b>${inr(paid(b))}</b></span><span>Due <b style="color:var(--warm)">${inr(Math.max(0,total(b)-paid(b)))}</b></span>`;
+  let msg="";
+  if(b.checkIn&&b.checkOut&&b.checkOut<=b.checkIn)msg="Check-out must be after check-in.";
+  else if(b.status!=="cancelled"){const c=state.bookings.find(x=>x.id!==b.id&&live(x)&&x.room===b.room&&x.checkIn<b.checkOut&&x.checkOut>b.checkIn);if(c)msg=`${roomName(b.room)} is already booked by ${c.guest} (${fmtD(c.checkIn)} → ${fmtD(c.checkOut)}).`}
+  let soft="";
+  if(!msg&&b.status!=="cancelled"){
+    const p=state.bookings.find(x=>x.id!==b.id&&live(x)&&x.room===b.room&&x.checkOut===b.checkIn&&tOut(x)>b.checkInTime);
+    const nx=state.bookings.find(x=>x.id!==b.id&&live(x)&&x.room===b.room&&x.checkIn===b.checkOut&&tIn(x)<b.checkOutTime);
+    if(p)soft=`${p.guest} leaves ${roomName(b.room)} at ${fmtT(tOut(p))} that day, after this check-in time.`;
+    else if(nx)soft=`${nx.guest} arrives in ${roomName(b.room)} at ${fmtT(tIn(nx))} that day, before this check-out time.`;
+  }
+  $("bClash").textContent=msg||soft;$("bClash").hidden=!(msg||soft);$("bClash").style.color=msg?"":"var(--warn)";
+  return !msg;
+}
+function openBooking(b,preset={}){
+  editing=b||null;delArmed=false;
+  const rooms=state.settings.rooms;
+  const room=b?.room||preset.room||rooms[0]?.id;
+  $("bTitle").textContent=b?"Edit booking":"New booking";
+  $("bGuest").value=b?.guest||"";$("bPhone").value=b?.phone||"";
+  opts($("bRoom"),rooms,room);$("bPax").value=b?.pax||2;
+  $("bIn").value=b?.checkIn||preset.day||TODAY;$("bOut").value=b?.checkOut||addDays(preset.day||TODAY,1);
+  $("bTIn").value=b?tIn(b):defIn();$("bTOut").value=b?tOut(b):defOut();$("bDisc").value=b?.discount||0;$("bDiscType").value=b?.discType||"amt";
+  dlgProds=JSON.parse(JSON.stringify(b?.purchases||[]));$("pQty").value=1;
+  $("pPick").innerHTML=(state.settings.products||[]).map(p=>`<option value="${esc(p.id)}">${esc(p.name)} · ${esc(p.unit)} · ${inr(p.price)}</option>`).join("")||`<option value="">Add products in Rooms &amp; settings</option>`;
+  prodRows();
+  $("bRate").value=b?.rate??(rooms.find(r=>r.id===room)?.rate||0);$("bExtra").value=b?.extras||0;
+  opts($("bSource"),SOURCES,b?.source||SOURCES[0]);$("bStatus").value=b?.status||"confirmed";$("bNotes").value=b?.notes||"";
+  $("bPays").innerHTML="";(b?.payments||[]).forEach(payRow);
+  dlgMeals=JSON.parse(JSON.stringify(b?.meals||{}));["mfB","mfL","mfD"].forEach(id=>$(id).value="");buildMealGrid();
+  $("bDelete").hidden=!b;$("bDelete").textContent="Delete";
+  calc();$("bDlg").showModal();
+}
+$("bRoom").addEventListener("change",()=>{if(!editing){const r=state.settings.rooms.find(r=>r.id===$("bRoom").value);if(r)$("bRate").value=r.rate}calc()});
+let dlgProds=[];
+function prodRows(){
+  $("bProds").innerHTML=dlgProds.map((p,i)=>`<div class="prow"><div class="pn"><b>${esc(p.name)}</b><div class="meta">${esc(p.unit)} @ ${inr(p.price)}</div></div>`+
+    `<label class="pq"><span class="meta">Qty</span><input type="number" min="0" data-i="${i}" data-f="qty" value="${esc(p.qty)}"></label>`+
+    `<label class="pq"><span class="meta">Disc %</span><input type="number" min="0" max="100" data-i="${i}" data-f="disc" placeholder="0" value="${p.disc?esc(p.disc):""}"></label>`+
+    `<span class="num pa">${inr(prodNet(p))}</span><button class="btn small" type="button" data-rm="${i}" aria-label="Remove ${esc(p.name)}">✕</button></div>`).join("");
+}
+$("bProds").addEventListener("input",e=>{const t=e.target.closest("[data-f]");if(!t)return;const p=dlgProds[+t.dataset.i];if(!p)return;
+  p[t.dataset.f]=Math.max(0,+t.value||0);if(t.dataset.f==="disc")p.disc=Math.min(100,p.disc);t.closest(".prow").querySelector(".pa").textContent=inr(prodNet(p));calc()});
+$("bProds").addEventListener("click",e=>{const r=e.target.closest("[data-rm]");if(!r)return;dlgProds.splice(+r.dataset.rm,1);prodRows();calc()});
+$("pAdd").onclick=()=>{const c=(state.settings.products||[]).find(p=>p.id===$("pPick").value);if(!c)return;const q=Math.max(1,+$("pQty").value||1);
+  const ex=dlgProds.find(p=>p.pid===c.id&&+p.price===+c.price);if(ex)ex.qty=(+ex.qty||0)+q;else dlgProds.push({pid:c.id,name:c.name,unit:c.unit,price:+c.price||0,qty:q,disc:0,date:TODAY});
+  $("pQty").value=1;prodRows();calc()};
+["bIn","bOut","bTIn","bTOut","bRate","bExtra","bDisc","bDiscType","bStatus"].forEach(id=>$(id).addEventListener("input",()=>{if(id==="bIn"&&$("bOut").value<=$("bIn").value)$("bOut").value=addDays($("bIn").value,1);if(id==="bIn"||id==="bOut")buildMealGrid();calc()}));
+let dlgMeals={};
+function buildMealGrid(){
+  const ci=$("bIn").value,co=$("bOut").value,days=stayDays({checkIn:ci,checkOut:co});
+  $("bMeals").innerHTML=days.length?`<span class="label">Day</span>${MEALS.map(([,n])=>`<span class="label">${n.slice(0,5)}</span>`).join("")}`+
+    days.map(d=>`<span>${fmtDW(d)}${d===ci?' <span class="meta">arrival</span>':d===co?' <span class="meta">departure</span>':""}</span>`+
+      MEALS.map(([k,n])=>`<input type="number" min="0" class="mIn" data-day="${d}" data-k="${k}" aria-label="${n} on ${fmtD(d)}" placeholder="0" value="${(dlgMeals[d]||{})[k]||""}">`).join("")).join(""):"";
+}
+$("bMeals").addEventListener("input",e=>{const i=e.target.closest(".mIn");if(!i)return;const d=i.dataset.day;dlgMeals[d]={...(dlgMeals[d]||{}),[i.dataset.k]:Math.max(0,+i.value||0)};calc()});
+$("mfApply").onclick=()=>{const v={b:+$("mfB").value||0,l:+$("mfL").value||0,d:+$("mfD").value||0};
+  stayDays({checkIn:$("bIn").value,checkOut:$("bOut").value}).forEach(d=>dlgMeals[d]={...v});buildMealGrid();calc()};
+$("addPay").onclick=()=>{payRow({amount:Math.max(0,total(readForm())-paid(readForm()))||""});calc()};
+$("bCancel").onclick=()=>$("bDlg").close();
+$("bForm").addEventListener("submit",async e=>{e.preventDefault();if(!calc())return;const b=readForm();if(!b.guest)return;b.id=b.id||uid();delete b.example;
+  if(await saveDoc("bookings",b)){$("bDlg").close();toast(editing?"Booking updated":"Booking saved")}});
+$("bBill").onclick=async()=>{if(!calc())return;const b=readForm();if(!b.guest){$("bGuest").focus();return}b.id=b.id||uid();delete b.example;
+  const sv=await saveDoc("bookings",b);if(sv){$("bDlg").close();openBill(sv)}};
+
+/* ---------- billing ---------- */
+let billing=null;
+function billData(b,cur="₹",x="×",minus="−"){
+  const S=state.settings,r=S.mealRates||{},n=nights(b.checkIn,b.checkOut),mp=mealPlates(b),A=v=>amt(v,cur,minus);
+  const lines=[{l:`Room charges (${roomName(b.room)})`,d:`${n} night${n===1?"":"s"} ${x} ${A(b.rate)}`,a:roomAmt(b)}];
+  MEALS.forEach(([k,nm])=>{if(!mp[k])return;if(+r[k])lines.push({l:nm,d:`${mp[k]} plates ${x} ${A(r[k])}`,a:mp[k]*r[k]});else lines.push({l:nm,d:`${mp[k]} plates (included)`,a:0})});
+  if(+b.extras)lines.push({l:"Extras",d:"",a:+b.extras});
+  (b.purchases||[]).forEach(p=>lines.push({l:p.name,d:`${p.qty} ${x} ${p.unit} @ ${A(p.price)}${+p.disc?`, ${p.disc}% off`:""}`,a:prodNet(p)}));
+  if(discAmt(b))lines.push({l:"Discount"+(b.discType==="pct"?` (${+b.discount}%)`:""),d:"",a:-discAmt(b)});
+  const g=gstAmt(b),c=Math.round(g/2);
+  return {gn:prodAmt(b)&&g?" (on stay)":"",lines,sub:subTotal(b),g,cg:c,sg:g-c,rate:+S.gstRate||0,tot:total(b),paid:paid(b),due:b.status==="cancelled"?0:Math.max(0,total(b)-paid(b))};
+}
+async function ensureBillNo(b){
+  if(b.billNo)return b;
+  const saved=await saveDoc("bookings",{...b,billNo:"NEW",billDate:TODAY});
+  return saved||b;
+}
+function billHTML(b){
+  const S=state.settings,D=billData(b),half=D.rate/2;
+  return `<div class="bh"><div><h3>${esc(S.name)}</h3>${S.address?`<div class="meta" style="white-space:pre-line">${esc(S.address)}</div>`:""}<div class="meta">${[S.phone?"Phone "+esc(S.phone):"",S.gstin?"GSTIN "+esc(S.gstin):""].filter(Boolean).join(" · ")}</div></div>
+    <div class="bno"><div class="label">Bill</div><div class="num">${esc(b.billNo||"")}</div><div class="meta">${fmtLong(b.billDate||TODAY)}</div></div></div>
+  <div class="bgrid"><div><div class="label">Guest</div><div><b>${esc(b.guest)}</b></div><div class="meta">${[esc(b.phone||""),b.pax?b.pax+" guests":""].filter(Boolean).join(" · ")}</div></div>
+    <div><div class="label">Check-in</div><div>${fmtDW(b.checkIn)}, ${fmtT(tIn(b))}</div><div class="meta">${esc(roomName(b.room))}</div></div>
+    <div><div class="label">Check-out</div><div>${fmtDW(b.checkOut)}, ${fmtT(tOut(b))}</div><div class="meta">${nights(b.checkIn,b.checkOut)} nights</div></div></div>
+  <div class="tablewrap"><table><thead><tr><th>Item</th><th>Details</th><th class="r">Amount</th></tr></thead><tbody>
+    ${D.lines.map(x=>`<tr><td>${esc(x.l)}</td><td class="meta">${esc(x.d)}</td><td class="r num">${amt(x.a)}</td></tr>`).join("")}
+    ${D.rate?`<tr class="tot"><td colspan="2">Subtotal</td><td class="r num">${amt(D.sub)}</td></tr><tr><td colspan="2">CGST ${half}%${D.gn}</td><td class="r num">${amt(D.cg)}</td></tr><tr><td colspan="2">SGST ${half}%${D.gn}</td><td class="r num">${amt(D.sg)}</td></tr>`:""}
+    <tr class="tot"><td colspan="2">Total</td><td class="r num">${amt(D.tot)}</td></tr>
+    ${(b.payments||[]).map(p=>`<tr><td colspan="2" class="meta">Paid ${fmtD(p.date)} · ${esc(p.mode)}</td><td class="r num">${amt(-p.amount)}</td></tr>`).join("")}
+    <tr class="tot due${D.due>0?"":" ok"}"><td colspan="2">${b.status==="cancelled"?"Booking cancelled":D.due>0?"Balance due":"Fully paid"}</td><td class="r num">${amt(D.due)}</td></tr>
+  </tbody></table></div>
+  ${S.upi&&D.due>0?`<div class="meta">Pay by UPI: <b class="num" style="color:var(--fg)">${esc(S.upi)}</b></div>`:""}
+  ${S.billNote?`<div class="meta">${esc(S.billNote)}</div>`:""}`;
+}
+function billText(b){
+  const S=state.settings,D=billData(b),L=[`*${S.name}*`,`Bill ${b.billNo||""} · ${fmtLong(b.billDate||TODAY)}`,"",`Guest: ${b.guest}`,`${roomName(b.room)} · ${fmtD(b.checkIn)} ${fmtT(tIn(b))} → ${fmtD(b.checkOut)} ${fmtT(tOut(b))}`,""];
+  D.lines.forEach(x=>L.push(`${x.l}${x.d?" ("+x.d+")":""}: ${amt(x.a)}`));
+  if(D.rate)L.push(`Subtotal: ${amt(D.sub)}`,`GST ${D.rate}%${D.gn}: ${amt(D.g)}`);
+  L.push(`*Total: ${amt(D.tot)}*`);if(D.paid)L.push(`Paid: ${amt(D.paid)}`);
+  L.push(D.due>0?`*Balance due: ${amt(D.due)}*`:"Fully paid. Thank you!");
+  if(S.upi&&D.due>0)L.push(`UPI: ${S.upi}`);if(S.billNote)L.push("",S.billNote);
+  return L.join("\n");
+}
+function billPdf(b){
+  const P=s=>String(s??"").replace(/[^\x20-\x7E\xA0-\xFF]/g,"");
+  const {jsPDF}=window.jspdf,doc=new jsPDF({unit:"pt",format:"a4"}),S=state.settings,D=billData(b,"Rs. ","x","-"),A=n=>amt(n,"Rs. ","-");
+  const L=48,R=547,ink=()=>doc.setTextColor(28,36,31),grey=()=>doc.setTextColor(93,106,97);let y=64;
+  ink();doc.setFont("helvetica","bold");doc.setFontSize(18);doc.text(P(S.name),L,y);
+  doc.setFontSize(10);doc.setTextColor(31,107,79);doc.text("BILL",R,y-8,{align:"right"});
+  ink();doc.setFont("helvetica","normal");doc.text(P(b.billNo),R,y+6,{align:"right"});doc.text(P(fmtLong(b.billDate||TODAY)),R,y+20,{align:"right"});
+  doc.setFontSize(9.5);grey();let yy=y+17;
+  (S.address||"").split("\n").filter(Boolean).forEach(l=>{doc.text(P(l),L,yy);yy+=13});
+  const contact=[S.phone?"Phone "+S.phone:"",S.gstin?"GSTIN "+S.gstin:""].filter(Boolean).join("    ");if(contact){doc.text(P(contact),L,yy);yy+=13}
+  y=Math.max(yy,y+28)+8;doc.setDrawColor(213,219,209);doc.line(L,y,R,y);y+=24;
+  const col=(x,label,l1,l2)=>{doc.setFont("helvetica","normal");doc.setFontSize(8);grey();doc.text(label,x,y);doc.setFontSize(10.5);ink();doc.text(P(l1),x,y+15);if(l2){doc.setFontSize(9);grey();doc.text(P(l2),x,y+29)}};
+  col(L,"GUEST",b.guest,[b.phone,b.pax?b.pax+" guests":""].filter(Boolean).join("  |  "));
+  col(L+190,"CHECK-IN",`${fmtDW(b.checkIn)}, ${fmtT(tIn(b))}`,roomName(b.room));
+  col(L+350,"CHECK-OUT",`${fmtDW(b.checkOut)}, ${fmtT(tOut(b))}`,`${nights(b.checkIn,b.checkOut)} nights`);
+  y+=58;
+  doc.setFillColor(232,236,229);doc.rect(L,y-13,R-L,21,"F");doc.setFontSize(8.5);grey();doc.text("ITEM",L+8,y+1);doc.text("DETAILS",L+190,y+1);doc.text("AMOUNT",R-8,y+1,{align:"right"});y+=28;
+  const row=(a,d,c,bold,size)=>{if(y>780){doc.addPage();y=64}doc.setFont("helvetica",bold?"bold":"normal");doc.setFontSize(size||10);ink();doc.text(P(a),L+8,y);if(d){grey();doc.text(P(d),L+190,y);ink()}doc.text(P(c),R-8,y,{align:"right"});y+=20};
+  D.lines.forEach(x=>row(x.l,x.d,A(x.a)));
+  doc.line(L,y-10,R,y-10);y+=4;
+  if(D.rate){row("Subtotal","",A(D.sub));row(`CGST ${D.rate/2}%${D.gn}`,"",A(D.cg));row(`SGST ${D.rate/2}%${D.gn}`,"",A(D.sg))}
+  row("Total","",A(D.tot),true,11);
+  (b.payments||[]).forEach(p=>row(`Paid ${fmtD(p.date)}`,p.mode,A(-p.amount)));
+  doc.line(L,y-10,R,y-10);y+=6;
+  row(b.status==="cancelled"?"Booking cancelled":D.due>0?"Balance due":"Fully paid","",A(D.due),true,12);
+  y+=8;doc.setFont("helvetica","normal");doc.setFontSize(9.5);grey();
+  if(S.upi&&D.due>0){doc.text(P("Pay by UPI: "+S.upi),L,y);y+=15}
+  if(S.billNote)doc.splitTextToSize(P(S.billNote),R-L).forEach(l=>{doc.text(l,L,y);y+=13});
+  return doc.output("blob");
+}
+async function openBill(b){
+  b=await ensureBillNo(b);billing=b;
+  $("billBody").innerHTML=billHTML(b);$("billErr").hidden=true;$("billText").hidden=true;
+  $("billPdf").hidden=!window.jspdf;
+  if(!$("billDlg").open)$("billDlg").showModal();
+}
+$("billClose").onclick=()=>$("billDlg").close();
+$("billEdit").onclick=()=>{const b=state.bookings.find(x=>x.id===billing?.id)||billing;$("billDlg").close();if(b)openBooking(b)};
+$("billCopy").onclick=()=>{
+  const t=billText(billing),ta=$("billText");
+  const fallback=()=>{ta.hidden=false;ta.value=t;ta.focus();ta.select();toast("Copy the selected text below")};
+  try{navigator.clipboard.writeText(t).then(()=>toast("Bill copied. Paste it in WhatsApp."),fallback)}catch(e){fallback()}
+};
+$("billPdf").onclick=async()=>{
+  $("billErr").hidden=true;
+  try{const blob=billPdf(billing);const name=`${billing.billNo} ${billing.guest}`.replace(/[^\w .-]/g,"").trim()+".pdf";
+    const url=URL.createObjectURL(blob),a=document.createElement("a");a.href=url;a.download=name;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),5000);toast("Bill downloaded")}
+  catch(e){if(e&&e.code==="declined")return;$("billErr").textContent=e&&e.code==="rate_limited"?"A save is already waiting for your answer. Finish that one first.":"The PDF could not be saved here. Use “Copy for WhatsApp” instead.";$("billErr").hidden=false}
+};
+
+$("bDelete").onclick=async()=>{if(!delArmed){delArmed=true;$("bDelete").textContent="Tap again to delete";return}
+  if(await delDoc("bookings",editing.id)){$("bDlg").close();toast("Booking deleted")}};
+
+/* ---------- expense dialog ---------- */
+let editingE=null,eArmed=false;
+function openExpense(x){
+  editingE=x||null;eArmed=false;
+  $("eTitle").textContent=x?"Edit expense":"Add expense";
+  const def=moneyMonth===TODAY.slice(0,7)?TODAY:moneyMonth+"-01";
+  $("eDate").value=x?.date||def;$("eAmt").value=x?.amount??"";opts($("eCat"),CATS,x?.category||CATS[0]);opts($("eMode"),MODES.filter(m=>m!=="OTA payout"),x?.mode||"UPI");$("eNote").value=x?.note||"";
+  $("eDelete").hidden=!x;$("eDelete").textContent="Delete";$("eDlg").showModal();
+}
+$("eCancel").onclick=()=>$("eDlg").close();
+$("eForm").addEventListener("submit",async e=>{e.preventDefault();const x={id:editingE?.id||uid(),date:$("eDate").value,amount:+$("eAmt").value||0,category:$("eCat").value,mode:$("eMode").value,note:$("eNote").value.trim()};
+  if(await saveDoc("expenses",x)){$("eDlg").close();toast("Expense saved")}});
+$("eDelete").onclick=async()=>{if(!eArmed){eArmed=true;$("eDelete").textContent="Tap again to delete";return}if(await delDoc("expenses",editingE.id)){$("eDlg").close();toast("Expense deleted")}};
+
+/* ---------- settings ---------- */
+function roomRow(r){const d=document.createElement("div");d.className="roomedit";d.dataset.id=r.id;
+  d.innerHTML=`<input class="rName" aria-label="Room name" value="${esc(r.name)}"><input class="rRate" type="number" min="0" step="50" aria-label="Nightly rate" value="${esc(r.rate)}" style="max-width:120px"><button class="btn small" type="button" aria-label="Remove room">✕</button>`;
+  d.querySelector("button").onclick=()=>d.remove();$("sRooms").appendChild(d)}
+function prodEditRow(p){const d=document.createElement("div");d.className="roomedit";d.dataset.id=p.id;
+  d.innerHTML=`<input class="xName" aria-label="Product name" placeholder="Product" value="${esc(p.name)}"><input class="xUnit" aria-label="Pack size" placeholder="250 g" value="${esc(p.unit)}" style="max-width:90px"><input class="xPrice" type="number" min="0" aria-label="Price" value="${esc(p.price)}" style="max-width:100px"><button class="btn small" type="button" aria-label="Remove product">✕</button>`;
+  d.querySelector("button").onclick=()=>d.remove();$("sProds").appendChild(d)}
+$("addProd").onclick=()=>{prodEditRow({id:"p"+uid(),name:"",unit:"",price:""});$("sProds").lastChild.querySelector(".xName").focus()};
+$("settingsBtn").onclick=()=>{loadUsers();["nuName","nuUser","nuPass","cpOld","cpNew"].forEach(id=>$(id).value="");$("sName").value=state.settings.name;$("sProds").innerHTML="";(state.settings.products||[]).forEach(prodEditRow);const S=state.settings;$("sAddr").value=S.address||"";$("sPhone").value=S.phone||"";$("sUpi").value=S.upi||"";$("sGstin").value=S.gstin||"";$("sGst").value=S.gstRate||0;$("sNote").value=S.billNote||"";$("sTIn").value=defIn();$("sTOut").value=defOut();const mr=state.settings.mealRates||{};$("sMB").value=mr.b||0;$("sML").value=mr.l||0;$("sMD").value=mr.d||0;$("sRooms").innerHTML="";state.settings.rooms.forEach(roomRow);$("sDlg").showModal()};
+$("addRoom").onclick=()=>roomRow({id:"r"+uid(),name:"Room "+($("sRooms").children.length+1),rate:2500});
+$("sCancel").onclick=()=>$("sDlg").close();
+$("sForm").addEventListener("submit",async e=>{e.preventDefault();
+  const s={name:$("sName").value.trim()||"Homestay Maintenance",address:$("sAddr").value.trim(),phone:$("sPhone").value.trim(),upi:$("sUpi").value.trim(),gstin:$("sGstin").value.trim(),gstRate:Math.max(0,+$("sGst").value||0),billNote:$("sNote").value.trim(),
+    products:[...$("sProds").children].map(d=>({id:d.dataset.id,name:d.querySelector(".xName").value.trim(),unit:d.querySelector(".xUnit").value.trim(),price:Math.max(0,+d.querySelector(".xPrice").value||0)})).filter(p=>p.name),checkInTime:$("sTIn").value||"12:00",checkOutTime:$("sTOut").value||"11:00",mealRates:{b:+$("sMB").value||0,l:+$("sML").value||0,d:+$("sMD").value||0},rooms:[...$("sRooms").children].map(d=>({id:d.dataset.id,name:d.querySelector(".rName").value.trim()||"Room",rate:+d.querySelector(".rRate").value||0}))};
+  if(!s.rooms.length){toast("Keep at least one room.");return}
+  try{state.settings=await api("settings.php",{method:"POST",body:s});render()}catch(err){if(err.code!=="auth")toast(err.message||"Could not save settings.");return}
+  $("sDlg").close();toast("Settings saved")});
+
+/* ---------- clicks ---------- */
+document.addEventListener("click",async e=>{
+  const mb=e.target.closest("[data-meal]");
+  if(mb){const i=state.bookings.findIndex(x=>x.id===mb.dataset.id);if(i<0)return;const b=state.bookings[i],cur=mealsOn(b,mealDay),k=mb.dataset.meal;
+    const v=Math.max(0,(+cur[k]||0)+(+mb.dataset.delta));if(v===(+cur[k]||0))return;
+    const nb={...b,meals:{...(b.meals||{}),[mealDay]:{b:+cur.b||0,l:+cur.l||0,d:+cur.d||0,[k]:v}}};
+    state.bookings[i]=nb;render();queueSave(nb);return}
+  const md=e.target.closest("[data-mday]");if(md){mealDay=md.dataset.mday;renderMeals();return}
+  const act=e.target.closest("[data-act]");
+  if(act){e.stopPropagation();const b=state.bookings.find(x=>x.id===act.dataset.id);if(!b)return;
+    if(act.dataset.act==="bill"){openBill(b);return}
+    const nb={...b,status:act.dataset.act==="checkin"?"checkedin":"checkedout"};if(await saveDoc("bookings",nb))toast(act.dataset.act==="checkin"?`${b.guest} checked in`:`${b.guest} checked out`);return}
+  const bEl=e.target.closest("[data-b]");if(bEl){const b=state.bookings.find(x=>x.id===bEl.dataset.b);if(b)openBooking(b);return}
+  const eEl=e.target.closest("[data-e]");if(eEl){const x=state.expenses.find(y=>y.id===eEl.dataset.e);if(x)openExpense(x);return}
+  const cell=e.target.closest(".cell");if(cell){openBooking(null,{room:cell.dataset.room,day:cell.dataset.day})}
+});
+$("newBookingBtn").onclick=()=>openBooking(null);
+$("newExpBtn").onclick=()=>openExpense(null);
+$("calPrev").onclick=()=>{calStart=addDays(calStart,-14);renderCal()};
+$("calNext").onclick=()=>{calStart=addDays(calStart,14);renderCal()};
+$("calToday").onclick=()=>{calStart=addDays(TODAY,-2);renderCal()};
+const shiftM=n=>{const[y,m]=moneyMonth.split("-").map(Number);const d=new Date(y,m-1+n,1);moneyMonth=d.getFullYear()+"-"+pad(d.getMonth()+1);renderMoney()};
+$("mPrev").onclick=()=>shiftM(-1);$("mNext").onclick=()=>shiftM(1);$("mNow").onclick=()=>{moneyMonth=TODAY.slice(0,7);renderMoney()};
+$("mlPrev").onclick=()=>{mealDay=addDays(mealDay,-1);renderMeals()};
+$("mlNext").onclick=()=>{mealDay=addDays(mealDay,1);renderMeals()};
+$("mlToday").onclick=()=>{mealDay=TODAY;renderMeals()};
+$("fSearch").addEventListener("input",renderBookings);$("fStatus").addEventListener("change",renderBookings);
+
+/* ---------- boot ---------- */
+function go(){ready=true;$("loading").hidden=true;render()}
+route();
+/* ---------- server sync, login, staff ---------- */
+async function loadAll(){
+  const [s,b,e]=await Promise.all([api("settings.php"),api("bookings.php"),api("expenses.php")]);
+  state.settings=s;state.bookings=b.bookings;state.expenses=e.expenses;
+  if(!ready)go();else render();
+}
+function showLogin(){$("loginWrap").hidden=false;$("loading").hidden=true;setTimeout(()=>$("lUser").focus(),50)}
+function setUser(u){ME=u;$("logoutBtn").title="Logged in as "+u.name}
+$("loginForm").addEventListener("submit",async e=>{e.preventDefault();$("lErr").hidden=true;$("lBtn").disabled=true;
+  try{const r=await api("auth.php?action=login",{method:"POST",body:{username:$("lUser").value.trim(),password:$("lPass").value}});
+    CSRF=r.csrf;setUser(r.user);$("lPass").value="";$("loginWrap").hidden=true;$("loading").hidden=ready;await loadAll()}
+  catch(err){$("lErr").textContent=err.message;$("lErr").hidden=false}
+  finally{$("lBtn").disabled=false}});
+$("logoutBtn").onclick=async()=>{try{await api("auth.php?action=logout",{method:"POST"})}catch(e){}location.reload()};
+async function loadUsers(){
+  $("sUsers").innerHTML='<div class="meta">Loading logins…</div>';
+  try{const r=await api("auth.php?action=users");
+    $("sUsers").innerHTML=r.users.map(u=>`<div class="roomedit" style="align-items:center"><span style="flex:1">${esc(u.name)} <span class="meta">(${esc(u.username)})</span></span>${u.self?'<span class="meta">you</span>':`<button class="btn small" type="button" data-deluser="${u.id}">Remove</button>`}</div>`).join("")}
+  catch(e){$("sUsers").innerHTML=`<div class="meta">${esc(e.message)}</div>`}
+}
+$("sUsers").addEventListener("click",async e=>{const b=e.target.closest("[data-deluser]");if(!b)return;
+  if(b.dataset.armed!=="1"){b.dataset.armed="1";b.textContent="Tap again to remove";return}
+  try{await api("auth.php?action=deluser",{method:"POST",body:{id:+b.dataset.deluser}});toast("Login removed");loadUsers()}catch(err){toast(err.message)}});
+$("nuAdd").onclick=async()=>{try{await api("auth.php?action=adduser",{method:"POST",body:{name:$("nuName").value.trim(),username:$("nuUser").value.trim(),password:$("nuPass").value}});
+  ["nuName","nuUser","nuPass"].forEach(id=>$(id).value="");toast("Login added");loadUsers()}catch(err){toast(err.message)}};
+$("cpGo").onclick=async()=>{try{await api("auth.php?action=password",{method:"POST",body:{current:$("cpOld").value,new:$("cpNew").value}});
+  $("cpOld").value="";$("cpNew").value="";toast("Password changed")}catch(err){toast(err.message)}};
+const canRefresh=()=>ready&&document.visibilityState==="visible"&&!Object.keys(pendingSave).length&&$("loginWrap").hidden;
+document.addEventListener("visibilitychange",()=>{if(canRefresh())loadAll().catch(()=>{})});
+setInterval(()=>{if(canRefresh())loadAll().catch(()=>{})},120000);
+(async()=>{
+  try{const me=await api("auth.php?action=me");if(!me.user){showLogin();return}CSRF=me.csrf;setUser(me.user);await loadAll()}
+  catch(e){if(e.code!=="auth")$("loading").textContent=e.message||"Could not reach the server. Reload the page to try again."}
+})();
+})();
+</script>
+</body>
+</html>
